@@ -1,20 +1,7 @@
-index.html
-// app.js
-import express from "express";
-import fetch from "node-fetch";
-import dotenv from "dotenv";
-dotenv.config();
-
-const app = express();
-app.use(express.json());
-
-// Serve static frontend files
-app.get("/", (req, res) => {
-res.send(`
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta charset="utf-8">
+<meta charset="UTF-8">
 <title>TICKR</title>
 <script src="https://s3.tradingview.com/tv.js"></script>
 <style>
@@ -22,11 +9,11 @@ res.send(`
 body { margin: 0; font-family: 'Segoe UI', sans-serif; background: #0f0f0f; color: white; }
 header { display: flex; justify-content: center; align-items: center; height: 60px; background: #111; font-size: 1.5em; letter-spacing: 2px; }
 .container { display: flex; height: calc(100vh - 60px); }
-.left-pane { flex: 3; padding: 10px; border-radius: 15px; margin: 10px; background: #1e1e1e; }
+.left-pane { flex: 3; padding: 10px; border-radius: 15px; margin: 10px; background: #1e1e1e; display: flex; flex-direction: column; }
 .right-pane { flex: 1; padding: 10px; margin: 10px; background: #1b1b1b; border-radius: 15px; display: flex; flex-direction: column; }
 input, button { padding: 8px; border-radius: 8px; border: none; margin: 5px 0; }
 button { cursor: pointer; background: #333; color: white; }
-#tradingview_chart { width: 100%; height: 100%; border-radius: 15px; }
+#tradingview_chart { width: 100%; flex: 1; border-radius: 15px; }
 #analysis-output { flex: 1; overflow-y: auto; white-space: pre-wrap; padding: 10px; background: #111; border-radius: 10px; margin-top: 10px; }
 .signup { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; }
 .signup input { width: 200px; }
@@ -35,6 +22,7 @@ button { cursor: pointer; background: #333; color: white; }
 </head>
 <body>
 
+<!-- Sign-up screen -->
 <div id="signup-screen" class="signup">
 <h1>TICKR</h1>
 <input id="username" placeholder="Username">
@@ -42,9 +30,11 @@ button { cursor: pointer; background: #333; color: white; }
 <button id="signup-btn">Sign Up</button>
 </div>
 
+<!-- Main website screen -->
 <div id="main-screen" style="display:none;">
 <header>TICKR</header>
 <main class="container">
+<!-- Left pane: chart -->
 <section class="left-pane">
 <div id="tradingview_chart"></div>
 <div style="display:flex; margin-top: 5px;">
@@ -52,6 +42,8 @@ button { cursor: pointer; background: #333; color: white; }
 <button id="load-btn">Load</button>
 </div>
 </section>
+
+<!-- Right pane: AI panel -->
 <aside class="right-pane">
 <h2 id="stock-title">No stock selected</h2>
 <button id="analyze-btn">AI Analyze</button>
@@ -61,7 +53,6 @@ button { cursor: pointer; background: #333; color: white; }
 </div>
 
 <script>
-let currentStockData;
 let widget = null;
 
 // Simple signup simulation
@@ -69,12 +60,11 @@ document.getElementById("signup-btn").addEventListener("click", () => {
 const user = document.getElementById("username").value;
 const pass = document.getElementById("password").value;
 if(!user || !pass){ alert("Fill all fields"); return; }
-// Hide signup, show main
 document.getElementById("signup-screen").style.display = "none";
 document.getElementById("main-screen").style.display = "block";
 });
 
-// Load TradingView live minute chart
+// Load TradingView chart
 function loadTradingView(ticker){
 if(widget) widget.remove();
 widget = new TradingView.widget({
@@ -95,89 +85,27 @@ autosize: true
 });
 }
 
-document.getElementById("load-btn").addEventListener("click", async () => {
+// Search ticker and update chart
+document.getElementById("load-btn").addEventListener("click", () => {
 const ticker = document.getElementById("search").value.trim().toUpperCase();
 if(!ticker) return;
 document.getElementById("stock-title").textContent = ticker;
 loadTradingView(ticker);
-
-// Fetch stock data from server
-const res = await fetch("/api/stock/"+ticker);
-if(res.ok) currentStockData = await res.json();
 });
 
-document.getElementById("analyze-btn").addEventListener("click", async () => {
-if(!currentStockData){ alert("Load a stock first"); return; }
+// Simulated AI analysis
+document.getElementById("analyze-btn").addEventListener("click", () => {
 const ticker = document.getElementById("stock-title").textContent;
-const res = await fetch("/api/analyze", {
-method: "POST",
-headers: { "Content-Type": "application/json" },
-body: JSON.stringify({ ticker, stockData: currentStockData })
-});
-const data = await res.json();
-document.getElementById("analysis-output").textContent =
-`Recommendation: ${data.recommendation}\n\nReasoning:\n${data.reasoning}`;
+if(ticker === "No stock selected"){ alert("Load a stock first"); return; }
+
+// Simulate recommendation
+const options = ["BUY", "HOLD", "SELL"];
+const random = options[Math.floor(Math.random()*options.length)];
+const reasoning = `This is a simulated recommendation for ${ticker}.\nCheck the chart trends, volume, and news before making decisions.`;
+
+document.getElementById("analysis-output").textContent = `Recommendation: ${random}\n\nReasoning:\n${reasoning}`;
 });
 </script>
+
 </body>
 </html>
-`);
-});
-
-// --- Backend: fetch stock data from Yahoo Finance ---
-async function getStockData(ticker){
-const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=1mo&interval=1m`;
-const resp = await fetch(url);
-if(!resp.ok) throw new Error("Failed to fetch stock data");
-const data = await resp.json();
-const result = data.chart.result[0];
-const timestamps = result.timestamp;
-const prices = result.indicators.quote[0].close;
-const history = timestamps.map((t,i)=>({date:new Date(t*1000).toISOString(), close: prices[i]}));
-return { history };
-}
-
-// --- OpenAI call ---
-async function callOpenAI(prompt){
-const resp = await fetch("https://api.openai.com/v1/chat/completions", {
-method: "POST",
-headers: {
-"Content-Type": "application/json",
-"Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
-},
-body: JSON.stringify({
-model: "gpt-4o-mini",
-messages: [
-{ role: "system", content: "You are a stock analysis assistant." },
-{ role: "user", content: prompt }
-],
-max_tokens: 600,
-temperature: 0.2
-})
-});
-const j = await resp.json();
-return j.choices[0].message.content;
-}
-
-// --- API endpoints ---
-app.get("/api/stock/:ticker", async (req,res) => {
-try{
-const data = await getStockData(req.params.ticker);
-res.json(data);
-}catch(err){ res.status(500).send(err.message); }
-});
-
-app.post("/api/analyze", async (req,res) => {
-try{
-const {ticker, stockData} = req.body;
-const pricesText = stockData.history.map(p=>`${p.date}: $${p.close.toFixed(2)}`).join("\n");
-const prompt = `Analyze ${ticker} stock (1-month minute data):\n${pricesText}\nProvide BUY/HOLD/SELL recommendation with reasoning. Return JSON { recommendation, reasoning }.`;
-const reply = await callOpenAI(prompt);
-let parsed;
-try{ parsed = JSON.parse(reply); }catch{ parsed={recommendation:"HOLD", reasoning: reply}; }
-res.json(parsed);
-}catch(err){ res.status(500).send(err.message); }
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, ()=>console.log("Server running at http://localhost:"+PORT));
